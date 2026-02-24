@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Root Siege</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #000; overflow: hidden; font-family: monospace; }
+canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; touch-action: none; }
+
+#startScreen {
+  position: fixed; inset: 0; z-index: 10;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(0, 5, 0, 0.80);
+  transition: opacity 0.5s;
+}
+#startScreen.hidden { opacity: 0; pointer-events: none; }
+
+.start-inner { text-align: center; }
+.tagline {
+  color: rgba(100, 220, 80, 0.7);
+  font-size: 12px; letter-spacing: 0.25em;
+  text-transform: uppercase; margin-top: 12px; margin-bottom: 32px;
+}
+.tap-hint {
+  color: rgba(255,255,255,0.45); font-size: 12px; letter-spacing: 0.3em;
+  text-transform: uppercase; animation: blink 1.5s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:0.35} 50%{opacity:1} }
+
+#hud {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 5;
+  display: none; justify-content: space-between; align-items: center;
+  padding: 12px 20px; pointer-events: none;
+}
+#scoreDisplay { color: #64DC50; font-size: 14px; letter-spacing: 0.15em; }
+#hpBar {
+  width: 120px; height: 8px; background: rgba(255,255,255,0.1);
+  border-radius: 4px; overflow: hidden;
+}
+#hpFill { height: 100%; background: #64DC50; border-radius: 4px; width: 100%; transition: width 0.3s, background 0.3s; }
+#levelDisplay { color: rgba(255,255,255,0.4); font-size: 12px; letter-spacing: 0.2em; }
+
+#gameOver {
+  position: fixed; inset: 0; z-index: 10;
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(0,5,0,0.9);
+}
+.go-title { color: #FF3D3D; font-size: 30px; letter-spacing: 0.3em; margin-bottom: 16px; }
+.go-score { color: #64DC50; font-size: 18px; letter-spacing: 0.2em; margin-bottom: 8px; }
+.go-best { color: rgba(100,220,80,0.5); font-size: 13px; letter-spacing: 0.15em; margin-bottom: 32px; }
+.go-tap { color: rgba(255,255,255,0.45); font-size: 12px; letter-spacing: 0.3em; animation: blink 1.5s ease-in-out infinite; }
+
+#levelAnn {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  z-index: 8; text-align: center; pointer-events: none; display: none;
+}
+.la-level { color: rgba(255,255,255,0.3); font-size: 11px; letter-spacing: 0.4em; text-transform: uppercase; margin-bottom: 6px; }
+.la-name { color: #64DC50; font-size: 22px; letter-spacing: 0.2em; }
+
+#energyBar {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  z-index: 5; pointer-events: none; display: none;
+  text-align: center;
+}
+.energy-label { color: rgba(100,220,80,0.5); font-size: 10px; letter-spacing: 0.3em; margin-bottom: 4px; }
+.energy-track { width: 200px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; margin: 0 auto; }
+.energy-fill { height: 100%; background: #64DC50; border-radius: 3px; width: 100%; transition: width 0.1s; }
+</style>
+</head>
+<body>
+
+<div id="startScreen">
+  <div class="start-inner">
+    <!-- SVG Option A: glowing title -->
+    <svg width="100%" height="120" viewBox="0 0 500 120" xmlns="http://www.w3.org/2000/svg" style="max-width:480px; overflow:visible; display:block; margin: 0 auto;">
+      <defs>
+        <filter id="titleGlow" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="9" result="blur"/>
+          <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+        </filter>
+      </defs>
+      <!-- Option B: root icon — branching lines above title -->
+      <g transform="translate(250,32)">
+        <defs>
+          <filter id="rootGlow">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="b"/>
+            <feComposite in="SourceGraphic" in2="b" operator="over"/>
+          </filter>
+        </defs>
+        <!-- Main trunk going up -->
+        <line x1="0" y1="10" x2="0" y2="-10" stroke="#64DC50" stroke-width="2.5" filter="url(#rootGlow)"
+              style="animation: rootGrow 1.4s ease-out forwards; stroke-dasharray:30; stroke-dashoffset:30;"/>
+        <!-- Branch left -->
+        <line x1="0" y1="-4" x2="-22" y2="-20" stroke="#64DC50" stroke-width="1.5" filter="url(#rootGlow)"
+              style="animation: rootGrow 1.4s ease-out 0.2s forwards; stroke-dasharray:30; stroke-dashoffset:30;"/>
+        <!-- Branch right -->
+        <line x1="0" y1="-4" x2="22" y2="-20" stroke="#64DC50" stroke-width="1.5" filter="url(#rootGlow)"
+              style="animation: rootGrow 1.4s ease-out 0.3s forwards; stroke-dasharray:30; stroke-dashoffset:30;"/>
+        <!-- Nutrient node circles -->
+        <circle cx="-22" cy="-20" r="4" fill="none" stroke="#FFAA33" stroke-width="1.5" filter="url(#rootGlow)"
+                style="animation: nodePulse 2s ease-in-out infinite;"/>
+        <circle cx="22" cy="-20" r="4" fill="none" stroke="#FFAA33" stroke-width="1.5" filter="url(#rootGlow)"
+                style="animation: nodePulse 2s ease-in-out 0.5s infinite;"/>
+        <circle cx="0" cy="-10" r="4" fill="none" stroke="#FFAA33" stroke-width="1.5" filter="url(#rootGlow)"
+                style="animation: nodePulse 2s ease-in-out 1s infinite;"/>
+      </g>
+      <text x="250" y="95" text-anchor="middle"
+            font-family="monospace" font-size="44" font-weight="900" letter-spacing="10"
+            fill="#64DC50"
+            filter="url(#titleGlow)"
+            style="animation: titleReveal 1.2s ease-out 0.3s forwards; opacity:0;">
+        ROOT SIEGE
+      </text>
+    </svg>
+    <style>
+      @keyframes titleReveal {
+        from { opacity:0; letter-spacing:24px; }
+        to   { opacity:1; letter-spacing:10px; }
+      }
+      @keyframes rootGrow { to { stroke-dashoffset: 0; } }
+      @keyframes nodePulse { 0%,100%{opacity:1;r:4} 50%{opacity:0.4;} }
+    </style>
+    <p class="tagline">Extend · Absorb · Defend</p>
+    <p class="tap-hint">Tap to Grow</p>
+  </div>
+</div>
+
+<div id="hud">
+  <div id="scoreDisplay">SCORE <span id="scoreVal">0</span></div>
+  <div>
+    <div style="color:rgba(255,255,255,0.3);font-size:10px;letter-spacing:0.2em;margin-bottom:3px;">TREE HP</div>
+    <div id="hpBar"><div id="hpFill"></div></div>
+  </div>
+  <div id="levelDisplay">LV <span id="levelVal">1</span></div>
+</div>
+
+<div id="energyBar">
+  <div class="energy-label">ROOT ENERGY</div>
+  <div class="energy-track"><div class="energy-fill" id="energyFill"></div></div>
+</div>
+
+<div id="levelAnn">
+  <div class="la-level">Level</div>
+  <div class="la-name" id="laName">-</div>
+</div>
+
+<div id="gameOver">
+  <div class="go-title" id="goTitle">ROOT WITHERED</div>
+  <div class="go-score">Score: <span id="goScore">0</span></div>
+  <div class="go-best">Best: <span id="goBest">0</span></div>
+  <div class="go-tap">Tap to Retry</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/tone@15.1.22/dist/Tone.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+// ─── Constants ──────────────────────────────────────────────────────────────
+const SCORE_KEY = 'root-siege-highscore';
+function getHighScore() { return parseInt(localStorage.getItem(SCORE_KEY) || '0'); }
+function saveHighScore(s) { if (s > getHighScore()) localStorage.setItem(SCORE_KEY, s); }
+
+const C = {
+  bg:       0x000C00,
+  tree:     0x64DC50,
+  root:     0x3A9030,
+  node:     0xFFAA33,
+  beetle:   0xFF3D3D,
+  soil:     0x1A0A00,
+  accent:   0xAAFF80,
+};
+
+const LEVELS = [
+  { name: 'First Growth',   nodes: 6,  beetles: 3,  beetleSpeed: 30,  beetleSpawn: 4.0, maxRootLen: 220, energy: 100, nodeScore: 80  },
+  { name: 'The Infestation', nodes: 8,  beetles: 5,  beetleSpeed: 38,  beetleSpawn: 3.2, maxRootLen: 260, energy: 90,  nodeScore: 100 },
+  { name: 'Deep Roots',     nodes: 9,  beetles: 7,  beetleSpeed: 46,  beetleSpawn: 2.6, maxRootLen: 300, energy: 80,  nodeScore: 120 },
+  { name: 'Swarm Season',   nodes: 11, beetles: 9,  beetleSpeed: 56,  beetleSpawn: 2.0, maxRootLen: 340, energy: 70,  nodeScore: 150 },
+  { name: 'The Last Stand', nodes: 14, beetles: 12, beetleSpeed: 66,  beetleSpawn: 1.4, maxRootLen: 380, energy: 60,  nodeScore: 200 },
+];
+
+// ─── Three.js Setup ──────────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+const canvas = renderer.domElement;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(C.bg);
+
+let W = window.innerWidth, H = window.innerHeight;
+const camera = new THREE.OrthographicCamera(-W/2, W/2, H/2, -H/2, 0.1, 100);
+camera.position.set(0, 0, 10);
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(W, H), 1.4, 0.5, 0.08);
+composer.addPass(bloom);
+
+// ─── Game State ──────────────────────────────────────────────────────────────
+let gameState = 'idle'; // idle | playing | gameover
+let score = 0;
+let treeHp = 100;
+let level = 0;
+let nodesLeft = 0;
+let energy = 100;
+let levelAnnTimer = 0;
+let beetleSpawnTimer = 0;
+let activeRoot = null; // currently growing root segment
+let rootGrowTarget = null; // {x, y} world coords
+let cameraShakeTimer = 0, cameraShakeMag = 0;
+
+// ─── Soil texture background ─────────────────────────────────────────────────
+// Scattered soil patches
+for (let i = 0; i < 40; i++) {
+  const size = 6 + Math.random() * 12;
+  const geo = new THREE.PlaneGeometry(size, size * 0.6);
+  const mat = new THREE.MeshBasicMaterial({ color: 0x1A0D00, transparent: true, opacity: 0.3 + Math.random() * 0.4 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set((Math.random() - 0.5) * W * 0.9, (Math.random() - 0.5) * H * 0.9, -0.5);
+  mesh.rotation.z = Math.random() * Math.PI;
+  scene.add(mesh);
+}
+
+// ─── Tree Core ───────────────────────────────────────────────────────────────
+// Central tree: circle + small branches
+const treeGroup = new THREE.Group();
+scene.add(treeGroup);
+
+// Trunk circle
+const trunkGeo = new THREE.CircleGeometry(18, 12);
+const trunkMat = new THREE.MeshBasicMaterial({ color: C.tree });
+const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+treeGroup.add(trunk);
+
+// Glow ring
+const treeRingGeo = new THREE.RingGeometry(20, 25, 24);
+const treeRingMat = new THREE.MeshBasicMaterial({ color: C.tree, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
+const treeRing = new THREE.Mesh(treeRingGeo, treeRingMat);
+treeGroup.add(treeRing);
+
+// Outer pulse ring
+const pulseGeo = new THREE.RingGeometry(26, 28, 32);
+const pulseMat = new THREE.MeshBasicMaterial({ color: C.accent, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
+const pulseRing = new THREE.Mesh(pulseGeo, pulseMat);
+treeGroup.add(pulseRing);
+
+// ─── Root system ─────────────────────────────────────────────────────────────
+const rootGroup = new THREE.Group();
+scene.add(rootGroup);
+
+const MAX_ROOT_SEGMENTS = 60;
+const rootSegments = [];
+for (let i = 0; i < MAX_ROOT_SEGMENTS; i++) {
+  const geo = new THREE.BufferGeometry();
+  // Line segment: just two points updated dynamically
+  const pts = new Float32Array(6);
+  geo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
+  const mat = new THREE.LineBasicMaterial({ color: C.root, transparent: true, opacity: 0, linewidth: 1 });
+  const line = new THREE.Line(geo, mat);
+  rootGroup.add(line);
+  rootSegments.push({ line, active: false, x1: 0, y1: 0, x2: 0, y2: 0, life: Infinity, drainRate: 0 });
+}
+
+// Growing root (the live one being extended)
+const growingRootGeo = new THREE.BufferGeometry();
+const growingPts = new Float32Array(6);
+growingRootGeo.setAttribute('position', new THREE.BufferAttribute(growingPts, 3));
+const growingRootMat = new THREE.LineBasicMaterial({ color: C.accent, transparent: true, opacity: 0, linewidth: 2 });
+const growingRootLine = new THREE.Line(growingRootGeo, growingRootMat);
+rootGroup.add(growingRootLine);
+
+let growingRoot = null; // { x1, y1, x2, y2, t (0→1), speed, targetNodeIdx }
+
+// ─── Nutrient nodes ───────────────────────────────────────────────────────────
+const MAX_NODES = 16;
+const nodeObjs = [];
+for (let i = 0; i < MAX_NODES; i++) {
+  // Amber glow circle
+  const geo = new THREE.CircleGeometry(8, 12);
+  const mat = new THREE.MeshBasicMaterial({ color: C.node, transparent: true, opacity: 0 });
+  const mesh = new THREE.Mesh(geo, mat);
+  scene.add(mesh);
+
+  // Outer ring
+  const rGeo = new THREE.RingGeometry(9, 12, 12);
+  const rMat = new THREE.MeshBasicMaterial({ color: C.node, transparent: true, opacity: 0, side: THREE.DoubleSide });
+  const rMesh = new THREE.Mesh(rGeo, rMat);
+  scene.add(rMesh);
+
+  nodeObjs.push({ mesh, rMesh, active: false, x: 0, y: 0, beingConsumed: false, consumeTimer: 0 });
+}
+
+// ─── Beetle system ────────────────────────────────────────────────────────────
+const MAX_BEETLES = 20;
+const beetleObjs = [];
+for (let i = 0; i < MAX_BEETLES; i++) {
+  const geo = new THREE.CircleGeometry(5, 6);
+  const mat = new THREE.MeshBasicMaterial({ color: C.beetle, transparent: true, opacity: 0 });
+  const mesh = new THREE.Mesh(geo, mat);
+  scene.add(mesh);
+
+  // Beetle legs (small lines)
+  const legGeo = new THREE.BufferGeometry();
+  const legPts = new Float32Array(24);
+  legGeo.setAttribute('position', new THREE.BufferAttribute(legPts, 3));
+  const legMat = new THREE.LineBasicMaterial({ color: C.beetle, transparent: true, opacity: 0 });
+  const legMesh = new THREE.LineSegments(legGeo, legMat);
+  scene.add(legMesh);
+
+  beetleObjs.push({
+    mesh, legMesh,
+    active: false, x: 0, y: 0, vx: 0, vy: 0,
+    targetNode: -1, speed: 0,
+    onRoot: false, rootSegIdx: -1,
+    phase: 'toNode', // toNode | toTree
+  });
+}
+
+// ─── Damage flash ─────────────────────────────────────────────────────────────
+const flashGeo = new THREE.PlaneGeometry(W * 2, H * 2);
+const flashMat = new THREE.MeshBasicMaterial({ color: 0xFF0000, transparent: true, opacity: 0 });
+const flashMesh = new THREE.Mesh(flashGeo, flashMat);
+flashMesh.position.z = 5;
+scene.add(flashMesh);
+let flashTimer = 0;
+
+// ─── Particle pool (absorption) ───────────────────────────────────────────────
+const MAX_ABSORB = 40;
+const absorbParticles = [];
+for (let i = 0; i < MAX_ABSORB; i++) {
+  const geo = new THREE.CircleGeometry(2.5, 6);
+  const mat = new THREE.MeshBasicMaterial({ color: C.node, transparent: true, opacity: 0 });
+  const mesh = new THREE.Mesh(geo, mat);
+  scene.add(mesh);
+  absorbParticles.push({ mesh, active: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 0.6 });
+}
+
+// ─── Audio ────────────────────────────────────────────────────────────────────
+let audioReady = false;
+let synthCrack, synthPop, synthChitter, synthDeath, synthLevel, synthWin;
+let droneLoop;
+
+async function initAudio() {
+  if (audioReady) return;
+  await Tone.start();
+  audioReady = true;
+
+  // Root extend crack
+  synthCrack = new Tone.NoiseSynth({
+    noise: { type: 'brown' },
+    envelope: { attack: 0.001, decay: 0.12, sustain: 0, release: 0.05 },
+    volume: -18
+  }).toDestination();
+
+  // Node absorbed pop
+  synthPop = new Tone.Synth({
+    oscillator: { type: 'triangle' },
+    envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.06 },
+    volume: -10
+  }).toDestination();
+
+  // Beetle chitter
+  synthChitter = new Tone.NoiseSynth({
+    noise: { type: 'white' },
+    envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.02 },
+    volume: -22
+  }).toDestination();
+
+  // Tree death
+  synthDeath = new Tone.Synth({
+    oscillator: { type: 'sawtooth' },
+    envelope: { attack: 0.05, decay: 0.8, sustain: 0, release: 0.4 },
+    volume: -10
+  }).toDestination();
+
+  // Level up
+  synthLevel = new Tone.PolySynth(Tone.Synth, {
+    oscillator: { type: 'triangle' },
+    envelope: { attack: 0.02, decay: 0.25, sustain: 0.1, release: 0.3 },
+    volume: -12
+  }).toDestination();
+
+  // Win
+  synthWin = new Tone.PolySynth(Tone.Synth, {
+    oscillator: { type: 'triangle' },
+    envelope: { attack: 0.02, decay: 0.4, sustain: 0.2, release: 0.5 },
+    volume: -10
+  }).toDestination();
+
+  // Background drone: deep forest hum, slow pulse
+  const droneOsc = new Tone.Synth({
+    oscillator: { type: 'sine' },
+    envelope: { attack: 1.0, decay: 0, sustain: 1, release: 1 },
+    volume: -28
+  }).toDestination();
+  const lfo = new Tone.LFO({ frequency: '0.3hz', min: -32, max: -24 });
+  lfo.connect(droneOsc.volume);
+  lfo.start();
+  droneOsc.triggerAttack('E1');
+}
+
+function playCrack() { if (!audioReady) return; try { synthCrack.triggerAttackRelease('16n'); } catch(e){} }
+function playPop() { if (!audioReady) return; try { synthPop.triggerAttackRelease('C5', '16n'); } catch(e){} }
+function playChitter() { if (!audioReady) return; try { synthChitter.triggerAttackRelease('32n'); } catch(e){} }
+function playDeath() { if (!audioReady) return; try { synthDeath.triggerAttackRelease('A1', '2n'); } catch(e){} }
+function playLevel() { if (!audioReady) return; try { synthLevel.triggerAttackRelease(['G4','B4','D5'], '8n'); } catch(e){} }
+function playWin() { if (!audioReady) return; try { synthWin.triggerAttackRelease(['C5','E5','G5','C6'], '4n'); } catch(e){} }
+
+// ─── Game Logic ───────────────────────────────────────────────────────────────
+function getFreeRootSeg() { return rootSegments.find(s => !s.active) || null; }
+function getFreeBeetle() { return beetleObjs.find(b => !b.active) || null; }
+function getFreeAbsorb() { return absorbParticles.find(p => !p.active) || null; }
+
+const ARENA_R = Math.min(W, H) * 0.44; // max distance from center for nodes
+
+function getRandomNodePos() {
+  const angle = Math.random() * Math.PI * 2;
+  const r = ARENA_R * (0.30 + Math.random() * 0.55);
+  return {
+    x: Math.cos(angle) * r,
+    y: Math.sin(angle) * r,
+  };
+}
+
+function spawnNodes() {
+  const cfg = LEVELS[level];
+  for (let i = 0; i < cfg.nodes && i < MAX_NODES; i++) {
+    const n = nodeObjs[i];
+    const pos = getRandomNodePos();
+    n.x = pos.x; n.y = pos.y;
+    n.mesh.position.set(n.x, n.y, 0.5);
+    n.rMesh.position.set(n.x, n.y, 0.6);
+    n.mesh.material.opacity = 1;
+    n.rMesh.material.opacity = 0.5;
+    n.active = true;
+    n.beingConsumed = false;
+    n.consumeTimer = 0;
+  }
+  nodesLeft = cfg.nodes;
+}
+
+function clearNodes() {
+  nodeObjs.forEach(n => {
+    n.active = false;
+    n.mesh.material.opacity = 0;
+    n.rMesh.material.opacity = 0;
+  });
+}
+
+function clearRoots() {
+  rootSegments.forEach(s => {
+    s.active = false;
+    s.line.material.opacity = 0;
+  });
+  growingRoot = null;
+  growingRootMat.opacity = 0;
+}
+
+function clearBeetles() {
+  beetleObjs.forEach(b => {
+    b.active = false;
+    b.mesh.material.opacity = 0;
+    b.legMesh.material.opacity = 0;
+  });
+}
+
+function spawnBeetle() {
+  const b = getFreeBeetle();
+  if (!b) return;
+  const angle = Math.random() * Math.PI * 2;
+  const spawnR = ARENA_R * 1.1;
+  b.x = Math.cos(angle) * spawnR;
+  b.y = Math.sin(angle) * spawnR;
+  b.speed = LEVELS[level].beetleSpeed;
+  b.active = true;
+  b.mesh.material.opacity = 1;
+  b.legMesh.material.opacity = 0.7;
+  b.onRoot = false;
+  b.phase = 'toNode';
+
+  // Pick a random active node as target
+  const activeNodes = nodeObjs.filter((n, idx) => n.active && idx < LEVELS[level].nodes);
+  if (activeNodes.length === 0) {
+    // Head for tree
+    b.phase = 'toTree';
+    b.targetNode = -1;
+  } else {
+    const target = activeNodes[Math.floor(Math.random() * activeNodes.length)];
+    b.targetNode = nodeObjs.indexOf(target);
+  }
+
+  updateBeetleVelocity(b);
+}
+
+function updateBeetleVelocity(b) {
+  let tx = 0, ty = 0;
+  if (b.phase === 'toNode' && b.targetNode >= 0) {
+    const n = nodeObjs[b.targetNode];
+    if (n && n.active) {
+      tx = n.x; ty = n.y;
+    } else {
+      b.phase = 'toTree';
+    }
+  }
+  if (b.phase === 'toTree') {
+    tx = 0; ty = 0;
+  }
+  const dx = tx - b.x, dy = ty - b.y;
+  const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+  b.vx = (dx / dist) * b.speed;
+  b.vy = (dy / dist) * b.speed;
+}
+
+function startGame() {
+  score = 0;
+  treeHp = 100;
+  level = 0;
+  energy = 100;
+  gameState = 'playing';
+
+  clearNodes();
+  clearRoots();
+  clearBeetles();
+  absorbParticles.forEach(p => { p.active = false; p.mesh.material.opacity = 0; });
+
+  spawnNodes();
+  beetleSpawnTimer = LEVELS[level].beetleSpawn * 0.5; // first beetle sooner
+
+  document.getElementById('hud').style.display = 'flex';
+  document.getElementById('energyBar').style.display = 'block';
+  document.getElementById('gameOver').style.display = 'none';
+  updateHUD();
+  showLevelAnn();
+}
+
+function updateHUD() {
+  document.getElementById('scoreVal').textContent = score;
+  document.getElementById('levelVal').textContent = level + 1;
+  const hpPct = Math.max(0, treeHp);
+  document.getElementById('hpFill').style.width = hpPct + '%';
+  document.getElementById('hpFill').style.background = hpPct > 40 ? '#64DC50' : hpPct > 20 ? '#FFAA33' : '#FF3D3D';
+  document.getElementById('energyFill').style.width = energy + '%';
+}
+
+function showLevelAnn() {
+  const ann = document.getElementById('levelAnn');
+  document.getElementById('laName').textContent = LEVELS[level].name;
+  ann.style.display = 'block';
+  ann.style.opacity = '1';
+  levelAnnTimer = 2.0;
+}
+
+function absorbNode(nodeIdx) {
+  const n = nodeObjs[nodeIdx];
+  if (!n || !n.active) return;
+  n.active = false;
+  n.mesh.material.opacity = 0;
+  n.rMesh.material.opacity = 0;
+
+  // Spawn absorption particles
+  for (let i = 0; i < 6; i++) {
+    const p = getFreeAbsorb();
+    if (!p) continue;
+    const ang = (i / 6) * Math.PI * 2;
+    p.active = true; p.x = n.x; p.y = n.y;
+    p.vx = Math.cos(ang) * 40; p.vy = Math.sin(ang) * 40;
+    p.mesh.position.set(p.x, p.y, 2);
+    p.mesh.material.opacity = 1;
+    p.life = 0; p.maxLife = 0.5 + Math.random() * 0.2;
+  }
+
+  // Energy restored
+  energy = Math.min(100, energy + 25);
+  score += LEVELS[level].nodeScore;
+  nodesLeft--;
+  playPop();
+  updateHUD();
+
+  // Update any beetles targeting this node
+  beetleObjs.forEach(b => {
+    if (b.active && b.targetNode === nodeIdx) {
+      b.phase = 'toTree';
+      updateBeetleVelocity(b);
+    }
+  });
+
+  if (nodesLeft <= 0) {
+    // Level clear
+    setTimeout(() => advanceLevel(), 600);
+  }
+}
+
+function advanceLevel() {
+  level++;
+  if (level >= LEVELS.length) {
+    endGame(true);
+    return;
+  }
+  clearNodes();
+  clearRoots();
+  clearBeetles();
+  spawnNodes();
+  beetleSpawnTimer = LEVELS[level].beetleSpawn * 0.5;
+  energy = Math.min(100, energy + 30);
+  playLevel();
+  showLevelAnn();
+  updateHUD();
+}
+
+function damageBeetle(b) {
+  b.active = false;
+  b.mesh.material.opacity = 0;
+  b.legMesh.material.opacity = 0;
+  playChitter();
+}
+
+function damageTree(amount) {
+  treeHp = Math.max(0, treeHp - amount);
+  flashTimer = 0.2;
+  cameraShakeTimer = 0.2;
+  cameraShakeMag = 4;
+  updateHUD();
+  if (treeHp <= 0) {
+    endGame(false);
+  }
+}
+
+function endGame(win) {
+  gameState = 'gameover';
+  clearBeetles();
+  playDeath();
+  if (win) playWin();
+  saveHighScore(score);
+  document.getElementById('goScore').textContent = score;
+  document.getElementById('goBest').textContent = getHighScore();
+  document.getElementById('goTitle').textContent = win ? 'ROOTS TRIUMPHANT' : 'ROOT WITHERED';
+  document.getElementById('goTitle').style.color = win ? '#64DC50' : '#FF3D3D';
+  document.getElementById('gameOver').style.display = 'flex';
+}
+
+// ─── Idle Animation (game-world specific) ─────────────────────────────────────
+// Show: slow root tendrils extending from center, 3 amber nodes pulsing, 
+// 2 beetles slowly crawling toward nodes from the edges.
+let idleTime = 0;
+const IDLE_ROOT_MAX = 5;
+const idleRoots = [];
+for (let i = 0; i < IDLE_ROOT_MAX; i++) {
+  const geo = new THREE.BufferGeometry();
+  const pts = new Float32Array(6);
+  geo.setAttribute('position', new THREE.BufferAttribute(pts, 3));
+  const mat = new THREE.LineBasicMaterial({ color: C.root, transparent: true, opacity: 0 });
+  const line = new THREE.Line(geo, mat);
+  scene.add(line);
+  const ang = (i / IDLE_ROOT_MAX) * Math.PI * 2;
+  idleRoots.push({ line, mat, angle: ang, length: 0, maxLength: 100 + Math.random() * 80 });
+}
+
+const IDLE_NODES = 3;
+const idleNodes = [];
+for (let i = 0; i < IDLE_NODES; i++) {
+  const ang = (i / IDLE_NODES) * Math.PI * 2 + 0.5;
+  const r = 110 + Math.random() * 50;
+  const geo = new THREE.CircleGeometry(7, 10);
+  const mat = new THREE.MeshBasicMaterial({ color: C.node, transparent: true, opacity: 0 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(Math.cos(ang)*r, Math.sin(ang)*r, 0.5);
+  scene.add(mesh);
+  idleNodes.push({ mesh, mat, ang, r });
+}
+
+const idleBeetle1Geo = new THREE.CircleGeometry(4, 6);
+const idleBeetle1Mat = new THREE.MeshBasicMaterial({ color: C.beetle, transparent: true, opacity: 0 });
+const idleBeetle1 = new THREE.Mesh(idleBeetle1Geo, idleBeetle1Mat);
+scene.add(idleBeetle1);
+let idleBeetleT = 0;
+
+// ─── Pointer Handling ─────────────────────────────────────────────────────────
+let pointerDownWorld = null;
+
+function screenToWorld(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (clientX - rect.left) - rect.width / 2,
+    y: -((clientY - rect.top) - rect.height / 2),
+  };
+}
+
+function onPointerDown(e) {
+  if (gameState === 'gameover') {
+    document.getElementById('gameOver').style.display = 'none';
+    startGame();
+    return;
+  }
+  if (gameState !== 'playing') return;
+
+  const wp = screenToWorld(e.clientX, e.clientY);
+
+  // Check if clicking on a node (absorb)
+  const cfg = LEVELS[level];
+  for (let i = 0; i < cfg.nodes; i++) {
+    const n = nodeObjs[i];
+    if (!n.active) continue;
+    const dx = wp.x - n.x, dy = wp.y - n.y;
+    if (Math.sqrt(dx*dx+dy*dy) < 30) {
+      // Start growing a root toward this node
+      if (energy >= 15) {
+        startGrowingRoot(n.x, n.y, i);
+        energy -= 15;
+        updateHUD();
+      }
+      return;
+    }
+  }
+
+  // Tapping on a beetle kills it (if close)
+  for (const b of beetleObjs) {
+    if (!b.active) continue;
+    const dx = wp.x - b.x, dy = wp.y - b.y;
+    if (Math.sqrt(dx*dx+dy*dy) < 25) {
+      damageBeetle(b);
+      score += 20;
+      updateHUD();
+      return;
+    }
+  }
+}
+
+function startGrowingRoot(tx, ty, nodeIdx) {
+  // Cancel previous growing root
+  if (growingRoot) {
+    // Commit as a segment
+    const seg = getFreeRootSeg();
+    if (seg) {
+      seg.active = true;
+      seg.x1 = growingRoot.x1; seg.y1 = growingRoot.y1;
+      seg.x2 = growingRoot.cx; seg.y2 = growingRoot.cy;
+      updateRootSegGeo(seg);
+      seg.line.material.opacity = 0.8;
+    }
+  }
+  growingRoot = { x1: 0, y1: 0, cx: 0, cy: 0, tx, ty, nodeIdx, t: 0, speed: 180 };
+  playCrack();
+}
+
+function updateRootSegGeo(seg) {
+  const pos = seg.line.geometry.attributes.position;
+  pos.setXYZ(0, seg.x1, seg.y1, 0.3);
+  pos.setXYZ(1, seg.x2, seg.y2, 0.3);
+  pos.needsUpdate = true;
+}
+
+// ─── Animation Loop ───────────────────────────────────────────────────────────
+const mainGroup = new THREE.Group();
+scene.add(mainGroup);
+
+let lastTime = performance.now() / 1000;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now() / 1000;
+  const dt = Math.min(now - lastTime, 0.05);
+  lastTime = now;
+
+  if (gameState === 'idle') {
+    idleTime += dt;
+
+    // Extend idle roots slowly
+    idleRoots.forEach((ir, i) => {
+      if (ir.length < ir.maxLength) {
+        ir.length += 28 * dt;
+        ir.mat.opacity = 0.5;
+      } else {
+        // Retract and re-extend (breathing)
+        ir.length = 10 + 55 * (0.5 + 0.5 * Math.sin(idleTime * 0.4 + i));
+        ir.mat.opacity = 0.3 + 0.2 * Math.sin(idleTime * 0.5 + i);
+      }
+      const ex = Math.cos(ir.angle) * ir.length;
+      const ey = Math.sin(ir.angle) * ir.length;
+      const pos = ir.line.geometry.attributes.position;
+      pos.setXYZ(0, 0, 0, 0.3);
+      pos.setXYZ(1, ex, ey, 0.3);
+      pos.needsUpdate = true;
+    });
+
+    // Pulse idle nodes
+    idleNodes.forEach((n, i) => {
+      n.mat.opacity = 0.5 + 0.4 * Math.sin(idleTime * 1.5 + i * 1.2);
+      n.mesh.position.x = Math.cos(n.ang + idleTime * 0.12) * n.r;
+      n.mesh.position.y = Math.sin(n.ang + idleTime * 0.12) * n.r;
+    });
+
+    // Idle beetle crawling toward a node slowly
+    idleBeetleT += dt * 0.15;
+    const idleTargetNode = idleNodes[0];
+    const edge = { x: -W*0.4, y: H*0.3 };
+    const bx = edge.x + (idleTargetNode.mesh.position.x - edge.x) * (idleBeetleT % 1);
+    const by = edge.y + (idleTargetNode.mesh.position.y - edge.y) * (idleBeetleT % 1);
+    idleBeetle1.position.set(bx, by, 1);
+    idleBeetle1Mat.opacity = 0.6;
+
+    // Tree pulse
+    treeRingMat.opacity = 0.2 + 0.15 * Math.sin(idleTime * 2);
+    pulseMat.opacity = 0.1 + 0.1 * Math.sin(idleTime * 1.5);
+
+  } else {
+    // Hide idle
+    idleRoots.forEach(ir => ir.mat.opacity = 0);
+    idleNodes.forEach(n => n.mat.opacity = 0);
+    idleBeetle1Mat.opacity = 0;
+  }
+
+  if (gameState === 'playing') {
+    // Level announcement fade
+    if (levelAnnTimer > 0) {
+      levelAnnTimer -= dt;
+      const ann = document.getElementById('levelAnn');
+      ann.style.opacity = levelAnnTimer > 0.4 ? Math.min(1, (2 - levelAnnTimer) * 3).toString() : (levelAnnTimer / 0.4).toString();
+      if (levelAnnTimer <= 0) ann.style.display = 'none';
+    }
+
+    // Beetle spawning
+    beetleSpawnTimer -= dt;
+    if (beetleSpawnTimer <= 0) {
+      spawnBeetle();
+      beetleSpawnTimer = LEVELS[level].beetleSpawn;
+    }
+
+    // Energy passive drain while root is growing
+    if (growingRoot) {
+      energy = Math.max(0, energy - 8 * dt);
+      updateHUD();
+      if (energy <= 0) {
+        // Cancel growing root
+        growingRoot = null;
+        growingRootMat.opacity = 0;
+      }
+    }
+
+    // Grow active root
+    if (growingRoot) {
+      const gr = growingRoot;
+      const dx = gr.tx - gr.x1, dy = gr.ty - gr.y1;
+      const totalDist = Math.sqrt(dx*dx+dy*dy);
+      gr.t += (gr.speed / totalDist) * dt;
+
+      if (gr.t >= 1) {
+        gr.t = 1;
+        gr.cx = gr.tx;
+        gr.cy = gr.ty;
+        // Commit segment
+        const seg = getFreeRootSeg();
+        if (seg) {
+          seg.active = true;
+          seg.x1 = gr.x1; seg.y1 = gr.y1;
+          seg.x2 = gr.cx; seg.y2 = gr.cy;
+          updateRootSegGeo(seg);
+          seg.line.material.opacity = 0.8;
+        }
+        // Absorb node
+        absorbNode(gr.nodeIdx);
+        growingRoot = null;
+        growingRootMat.opacity = 0;
+      } else {
+        gr.cx = gr.x1 + dx * gr.t;
+        gr.cy = gr.y1 + dy * gr.t;
+        // Update growing root line
+        const pos = growingRootGeo.attributes.position;
+        pos.setXYZ(0, gr.x1, gr.y1, 0.4);
+        pos.setXYZ(1, gr.cx, gr.cy, 0.4);
+        pos.needsUpdate = true;
+        growingRootMat.opacity = 0.9;
+      }
+    }
+
+    // Root segments: gently fade over time (roots are semi-permanent this level)
+    rootSegments.forEach(s => {
+      if (!s.active) return;
+      // no fade this level — roots persist until level end
+    });
+
+    // Update beetles
+    beetleObjs.forEach(b => {
+      if (!b.active) return;
+
+      updateBeetleVelocity(b);
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      b.mesh.position.set(b.x, b.y, 1);
+
+      // Update leg geometry (simple cross)
+      const lpos = b.legMesh.geometry.attributes.position;
+      const s = 7;
+      lpos.setXYZ(0, b.x-s, b.y, 0.9); lpos.setXYZ(1, b.x+s, b.y, 0.9);
+      lpos.setXYZ(2, b.x, b.y-s, 0.9); lpos.setXYZ(3, b.x, b.y+s, 0.9);
+      lpos.needsUpdate = true;
+      b.legMesh.material.opacity = 0.5 + 0.3 * Math.sin(now * 12 + b.x);
+
+      // Check if beetle reached its target node
+      if (b.phase === 'toNode' && b.targetNode >= 0) {
+        const n = nodeObjs[b.targetNode];
+        if (n && n.active) {
+          const dx = b.x - n.x, dy = b.y - n.y;
+          if (Math.sqrt(dx*dx+dy*dy) < 12) {
+            // Beetle consumes node
+            n.beingConsumed = true;
+            n.consumeTimer += dt * 3;
+            if (n.consumeTimer >= 1) {
+              n.active = false;
+              n.mesh.material.opacity = 0;
+              n.rMesh.material.opacity = 0;
+              nodesLeft--;
+              b.phase = 'toTree';
+              updateBeetleVelocity(b);
+              if (nodesLeft <= 0) {
+                setTimeout(() => advanceLevel(), 600);
+              }
+            }
+            n.mesh.material.opacity = 1 - n.consumeTimer * 0.8;
+          }
+        } else {
+          b.phase = 'toTree';
+          updateBeetleVelocity(b);
+        }
+      }
+
+      // Check if beetle reached tree
+      if (b.phase === 'toTree') {
+        const dist = Math.sqrt(b.x*b.x + b.y*b.y);
+        if (dist < 24) {
+          damageTree(10);
+          b.active = false;
+          b.mesh.material.opacity = 0;
+          b.legMesh.material.opacity = 0;
+        }
+      }
+    });
+
+    // Absorption particles
+    absorbParticles.forEach(p => {
+      if (!p.active) return;
+      p.life += dt;
+      if (p.life >= p.maxLife) { p.active = false; p.mesh.material.opacity = 0; return; }
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.vx *= 0.92; p.vy *= 0.92;
+      p.mesh.position.set(p.x, p.y, 2);
+      p.mesh.material.opacity = 1 - p.life / p.maxLife;
+    });
+
+    // Flash
+    if (flashTimer > 0) {
+      flashTimer -= dt;
+      flashMesh.material.opacity = Math.max(0, flashTimer / 0.2 * 0.25);
+    } else {
+      flashMesh.material.opacity = 0;
+    }
+
+    // Camera shake
+    if (cameraShakeTimer > 0) {
+      cameraShakeTimer -= dt;
+      const mag = cameraShakeMag * (cameraShakeTimer / 0.2);
+      scene.position.x = (Math.random()-0.5)*mag;
+      scene.position.y = (Math.random()-0.5)*mag;
+    } else {
+      scene.position.set(0, 0, 0);
+    }
+
+    // Tree ring pulse (faster when HP low)
+    const urgency = 1 - treeHp / 100;
+    treeRingMat.opacity = 0.2 + 0.2 * Math.sin(now * (2 + urgency * 6));
+    pulseMat.opacity = urgency * 0.3 * Math.abs(Math.sin(now * (3 + urgency * 8)));
+    trunkMat.color.setRGB(
+      0.39 + urgency * 0.4,
+      0.86 - urgency * 0.3,
+      0.31 - urgency * 0.2
+    );
+  }
+
+  composer.render();
+}
+
+// ─── Input ────────────────────────────────────────────────────────────────────
+document.getElementById('startScreen').addEventListener('pointerdown', () => {
+  document.getElementById('startScreen').classList.add('hidden');
+  initAudio().catch(() => {});
+  startGame();
+}, { once: true });
+
+canvas.addEventListener('pointerdown', onPointerDown);
+canvas.addEventListener('pointercancel', () => {});
+
+window.addEventListener('resize', () => {
+  W = window.innerWidth; H = window.innerHeight;
+  renderer.setSize(W, H);
+  camera.left = -W/2; camera.right = W/2;
+  camera.top = H/2; camera.bottom = -H/2;
+  camera.updateProjectionMatrix();
+  composer.setSize(W, H);
+});
+
+animate();
+</script>
+<a href="https://github.com/nishivector/root-siege" target="_blank" style="position:fixed;bottom:16px;right:16px;color:rgba(255,255,255,0.25);font-size:11px;text-decoration:none;font-family:monospace;z-index:1000;">GitHub ↗</a>
+</body>
+</html>
